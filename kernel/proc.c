@@ -105,7 +105,7 @@ static struct proc*
 allocproc(void)
 {
   struct proc *p;
-
+  //寻找unused的进程
   for(p = proc; p < &proc[NPROC]; p++) {
     acquire(&p->lock);
     if(p->state == UNUSED) {
@@ -116,16 +116,26 @@ allocproc(void)
   }
   return 0;
 
+//初始化找到的空闲进程
 found:
   p->pid = allocpid();
   p->state = USED;
 
   // Allocate a trapframe page.
+  // 分配一个trapframe页，如果不成功则释放当前进程和锁
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
     freeproc(p);
     release(&p->lock);
     return 0;
   }
+
+  if((p->uscall = (struct usyscall *)kalloc()) == 0){//初始化usyscall结构体用于映射
+    freeproc(p);
+    release(&p->lock);
+    return 0;
+  }
+  
+  p->uscall->pid = p->pid;//分配成功后将pid信息放入usyscall
 
   // An empty user page table.
   p->pagetable = proc_pagetable(p);
@@ -153,6 +163,10 @@ freeproc(struct proc *p)
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
+  if(p->uscall)
+    kfree((void*)p->uscall);
+  p->uscall = 0;
+  
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
   p->pagetable = 0;
@@ -196,6 +210,14 @@ proc_pagetable(struct proc *p)
     return 0;
   }
 
+  if(mappages(pagetable, USYSCALL, PGSIZE,
+             (uint64)(p->uscall), PTE_R | PTE_U) < 0){//这里PTE_U是指允许用户模式下访问
+    uvmunmap(pagetable, TRAMPOLINE, 1, 0);//这里出错了要把之前所有的映射关系全部释放
+    uvmunmap(pagetable, TRAPFRAME, 1, 0);
+    uvmfree(pagetable, 0);
+    return 0;
+  }
+
   return pagetable;
 }
 
@@ -206,6 +228,8 @@ proc_freepagetable(pagetable_t pagetable, uint64 sz)
 {
   uvmunmap(pagetable, TRAMPOLINE, 1, 0);
   uvmunmap(pagetable, TRAPFRAME, 1, 0);
+  uvmunmap(pagetable, USYSCALL, 1, 0);//解除映射关系
+  
   uvmfree(pagetable, sz);
 }
 

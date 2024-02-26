@@ -95,6 +95,8 @@ struct proc {
 
   // wait_lock must be held when using this:
   struct proc *parent;         // Parent process
+  
+  struct usyscall *uscall;     //存储当前进程的pid，该指针指向了加速页面的起始物理地址
 
   // these are private to the process, so p->lock need not be held.
   uint64 kstack;               // Virtual address of kernel stack
