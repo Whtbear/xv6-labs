@@ -118,6 +118,7 @@ void
 panic(char *s)
 {
   pr.locking = 0;
+  backtrace();
   printf("panic: ");
   printf(s);
   printf("\n");
@@ -131,4 +132,16 @@ printfinit(void)
 {
   initlock(&pr.lock, "pr");
   pr.locking = 1;
+}
+
+void
+backtrace(void)//xv6给每个用户进程分配一个页4096Bytes作为用户栈。
+{
+  //地址都用uint64
+  uint64 cur_fp = r_fp();
+  while(cur_fp != PGROUNDDOWN(cur_fp)){
+    printf("%p\n", *(uint64 *)(cur_fp - 8));//指针解引用，解的是地址上的函数返回地址，而cur_fp的运算
+    //是uint64指针运算，要取栈上的存储需要用指针解引用来计算
+    cur_fp = *(uint64 *)(cur_fp - 16);
+  }
 }

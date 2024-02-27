@@ -57,6 +57,7 @@ sys_sleep(void)
 {
   int n;
   uint ticks0;
+  backtrace();
 
   if(argint(0, &n) < 0)
     return -1;
@@ -95,3 +96,24 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+uint64
+sys_sigalarm(void)
+{
+  struct proc *p = myproc();
+  //将参数读入当前进程的字段中
+  if(argint(0, &p->alarm_interval) < 0 || argaddr(1, (uint64*)&p->alarm_handler) < 0)//这里函数句柄是传入地址
+    return -1;
+  return 0;
+}
+
+uint64
+sys_sigreturn(void)
+{
+  //恢复陷阱帧
+  memmove(myproc()->trapframe, myproc()->alarm_trapframe, sizeof(struct trapframe));
+  //恢复alarm状态
+  myproc()->is_alarming = 0;
+  return 0;
+}
+

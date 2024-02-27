@@ -78,17 +78,17 @@ kvminithart()
 //   12..20 -- 9 bits of level-0 index.
 //    0..11 -- 12 bits of byte offset within the page.
 pte_t *
-walk(pagetable_t pagetable, uint64 va, int alloc)
+walk(pagetable_t pagetable, uint64 va, int alloc)//返回虚拟地址va对应的页表中pte的位置
 {
   if(va >= MAXVA)
     panic("walk");
 
-  for(int level = 2; level > 0; level--) {
+  for(int level = 2; level > 0; level--) {//分三级
     pte_t *pte = &pagetable[PX(level, va)];
-    if(*pte & PTE_V) {
+    if(*pte & PTE_V) {//PTE_V指示PTE是否存在
       pagetable = (pagetable_t)PTE2PA(*pte);
     } else {
-      if(!alloc || (pagetable = (pde_t*)kalloc()) == 0)
+      if(!alloc || (pagetable = (pde_t*)kalloc()) == 0)//没有分配则创建需要的页表页
         return 0;
       memset(pagetable, 0, PGSIZE);
       *pte = PA2PTE(pagetable) | PTE_V;
@@ -269,9 +269,9 @@ freewalk(pagetable_t pagetable)
   // there are 2^9 = 512 PTEs in a page table.
   for(int i = 0; i < 512; i++){
     pte_t pte = pagetable[i];
-    if((pte & PTE_V) && (pte & (PTE_R|PTE_W|PTE_X)) == 0){
+    if((pte & PTE_V) && (pte & (PTE_R|PTE_W|PTE_X)) == 0){//这里的条件设置不大明朗
       // this PTE points to a lower-level page table.
-      uint64 child = PTE2PA(pte);
+      uint64 child = PTE2PA(pte);//得到子页表项的物理地址
       freewalk((pagetable_t)child);
       pagetable[i] = 0;
     } else if(pte & PTE_V){
@@ -431,4 +431,33 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   } else {
     return -1;
   }
+}
+
+void
+vmtree(pagetable_t pagetable, int depth)
+{
+  //从512个页表项找到对应的索引
+  for(int i = 0; i < 512;i++){
+    pte_t pte = pagetable[i];
+    if(pte & PTE_V){//只要有效即可
+      for(int j = 0;j < depth; j++) 
+        if (j < depth-1)
+          printf(".. ");
+        else
+          printf("..");
+      uint64 child = PTE2PA(pte);
+      printf("%d: pte %p pa %p\n", i, pte, child);
+      if(depth >= 3)//页表索引最多分三级
+        continue;
+      else//继续遍历叶子
+        vmtree((pagetable_t)child, depth + 1);
+    }
+  }
+}
+
+void
+vmprint(pagetable_t pagetable)
+{
+  printf("page table %p\n", pagetable);
+  vmtree(pagetable, 1);
 }

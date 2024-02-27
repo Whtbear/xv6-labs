@@ -43,9 +43,11 @@ usertrap(void)
 
   // send interrupts and exceptions to kerneltrap(),
   // since we're now in the kernel.
+  // 向kerneltrap()发送中断和异常，此处在内核中
   w_stvec((uint64)kernelvec);
 
   struct proc *p = myproc();
+  
   
   // save user program counter.
   p->trapframe->epc = r_sepc();
@@ -77,8 +79,19 @@ usertrap(void)
     exit(-1);
 
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2)
+  // 计时器中断
+  if(which_dev == 2){//三个条件陷入，计数到达指定间隔数，且当前alarm状态为关闭，且间隔不为0
+    if(++p->ticks_count == p->alarm_interval && p->is_alarming == 0 && p->alarm_interval != 0){
+      //先保存寄存器内容
+      memmove(p->alarm_trapframe, p->trapframe, sizeof(struct trapframe));
+      //这里要切换调用进程陷入的程序计数器
+      p->trapframe->epc = (uint64)p->alarm_handler;
+      p->ticks_count = 0;//重新计数
+      p->is_alarming = 1;
+    }
+    
     yield();
+  }
 
   usertrapret();
 }

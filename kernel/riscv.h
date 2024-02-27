@@ -323,6 +323,15 @@ r_ra()
   return x;
 }
 
+static inline uint64//调用此函数来读取当前的帧指针
+r_fp()
+{
+  uint64 x;
+  asm volatile("mv %0, s0" : "=r" (x) );//使用内联汇编读取s0
+  return x;
+}
+
+
 // flush the TLB.
 static inline void
 sfence_vma()
