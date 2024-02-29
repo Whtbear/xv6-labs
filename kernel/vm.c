@@ -303,7 +303,6 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   pte_t *pte;
   uint64 pa, i;
   uint flags;
-  char *mem;
 
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
@@ -311,14 +310,21 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
     if((*pte & PTE_V) == 0)
       panic("uvmcopy: page not present");
     pa = PTE2PA(*pte);
-    flags = PTE_FLAGS(*pte);
-    if((mem = kalloc()) == 0)
-      goto err;
-    memmove(mem, (char*)pa, PGSIZE);
-    if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
-      kfree(mem);
-      goto err;
+    flags = PTE_FLAGS(*pte);//获得PTE标志位
+    // 这里仅对可写页面设置COW标记
+    if(flags & PTE_W){
+      flags = (flags | PTE_COW) & ~PTE_W;//需要把PTE_W的标记取消
+      *pte = PA2PTE(pa) | flags;//设置到pte上
     }
+    
+    if(mappages(new, i, PGSIZE, pa, flags) != 0){//如果映射出错,删除映射
+      goto err;
+      return -1;
+    
+    }
+    // 增加内存的引用计数
+    kaddrefcnt((char*)pa);
+    
   }
   return 0;
 
@@ -351,6 +357,10 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
     pa0 = walkaddr(pagetable, va0);
+    //需要查看是否为COW页面
+    if(is_cow(pagetable, va0) == 0){
+      pa0 = (uint64)cowalloc(pagetable, va0);//更换物理地址
+    }
     if(pa0 == 0)
       return -1;
     n = PGSIZE - (dstva - va0);
