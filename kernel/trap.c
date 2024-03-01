@@ -50,7 +50,7 @@ usertrap(void)
   // save user program counter.
   p->trapframe->epc = r_sepc();
   
-  if(r_scause() == 8){
+  if(r_scause() == 8){ //来自U-mode模式下的环境调用
     // system call
 
     if(p->killed)
@@ -67,7 +67,8 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
-  } else if(r_scause() == 13 || r_scause() == 15){
+  } else if(r_scause() == 13 || r_scause() == 15){//13为Load page fault，15为Store/AMO page fault
+  //主要是处理页面故障
     uint64 fault_va = r_stval();//获取的是出错虚拟地址
     if(fault_va >= p->sz || is_cow(p->pagetable, fault_va) !=0 || cowalloc(p->pagetable, PGROUNDDOWN(fault_va)) == 0)
       p->killed = 1;
